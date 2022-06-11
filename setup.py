@@ -8,7 +8,7 @@ from __version__ import __version__
 # Thanks to Mark Smith (@Judy2k)'s very helpful talk about PyPI
 # https://youtu.be/GIF3LaRqgXo?t=297
 
-with open("README.md", "r") as fh:
+with open("README.md", "r", encoding="utf-8") as fh:
    long_description = fh.read()
 
 setup(
@@ -23,6 +23,7 @@ setup(
       "Programming Language :: Python :: 3.7",
       "Programming Language :: Python :: 3.8",
       "Programming Language :: Python :: 3.9",
+      "Programming Language :: Python :: 3.10",
       "License :: OSI Approved :: MIT License",
       "Operating System :: OS Independent",
       "Intended Audience :: Developers",
@@ -35,21 +36,21 @@ setup(
    long_description=long_description,
    long_description_content_type="text/markdown",
    install_requires=[
-      "httpx==0.18.2", # https://www.python-httpx.org/
+      "httpx>=0.23.0", # https://www.python-httpx.org/
       "colour>=0.1",
       "pytz>=2021",
    ],
    extras_require = {
       "dev": [
-         "Sphinx==3.5.4", # documentation!
-         "sphinx-autodoc-typehints==1.12.0", # better sphinx parsing
-         "sphinx-book-theme==0.1.0", # Book theme
-         "sphinxcontrib-trio==1.1.2", # better async handling
-         "mypy==0.910", # type checking
+         "Sphinx==5.0.1", # documentation!
+         "sphinx-autodoc-typehints", # better sphinx parsing
+         "sphinx-book-theme", # Book theme
+         "sphinxcontrib-trio", # better async handling
+         "mypy", # type checking
          "types-pytz==2021.1.0", # type checking with pytz
-         "pytest==6.2.4", # testing module
-         "check-manifest==0.46", # creating MANIFEST.in
-         "twine==3.4.1", # for uploading to PyPI
+         "pytest", # testing module
+         "check-manifest", # creating MANIFEST.in
+         "twine", # for uploading to PyPI
          "wheel>=0.36.2", # for building wheels
       ]
    },

@@ -13,7 +13,7 @@
 import os
 import sys
 sys.path.append(os.path.abspath(".."))
-sys.path.append(os.path.abspath("../pluralkit/v1"))
+sys.path.append(os.path.abspath("../pluralkit/v2"))
 sys.path.insert(0, os.path.abspath(".."))
 from pluralkit import __version__
 from datetime import datetime
@@ -21,7 +21,7 @@ from datetime import datetime
 # -- Project information -----------------------------------------------------
 
 project = "pluralkit.py"
-copyright = "2021, Madison Landry, Alyx Warner"
+copyright = "2022, Madison Landry, Alyx Warner"
 author = "Madison Landry, Alyx Warner"
 
 # The full version
@@ -63,6 +63,9 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 #html_theme = "alabaster"
 #html_theme = "basicstrap" # https://pythonhosted.org/sphinxjp.themes.basicstrap/
 html_theme = "sphinx_book_theme" # https://sphinx-themes.org/sample-sites/sphinx-book-theme/
+#html_theme = "press"
+#html_theme = "sphinxawesome_theme"
+
 
 today = datetime.utcnow().strftime(
    "<time datetime=\"%Y-%m-%dT%H:%MZ\">" \
