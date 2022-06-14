@@ -29,6 +29,8 @@ class Privacy(Enum):
     PUBLIC = "public"
     PRIVATE = "private"
     #UNKNOWN = None # legacy, effectively resets privacy to "public"
+    def json(self):
+        return self.value
 
 class AutoproxyMode(Enum):
     """Represents the autproxy modes.
@@ -48,12 +50,18 @@ class Model:
         """Return a JSON object representing this model.
         """
         model = {}
-        for k, v in self.__dict__.items:
+        privacy = {}
+        for k, v in self.__dict__.items():
             if not k.startswith("_"):
-                if hasattr(v, "json"):
+                if "privacy" in k or "visibility" in k:
+                        privacy[k] = v.json()
+                elif hasattr(v, "json"):
                     # recurse
                     model[k] = v.json()
-
+                else:
+                    model[k] = v
+        if privacy != {}:
+            model["privacy"] = privacy
         return model
 
     def __init__(self, json, ignore_keys=None):
@@ -691,6 +699,7 @@ class Member(Model):
         visibility: Whether this member is visible to others (i.e. in member lists).
     """
     id: MemberId
+    uuid: MemberId
     name: str
     created: Timestamp
     name_privacy: Privacy
