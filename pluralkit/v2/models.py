@@ -32,6 +32,8 @@ class Privacy(Enum):
     def json(self):
         return self.value
 
+    def json(self): return self.value
+
 class AutoproxyMode(Enum):
     """Represents the autproxy modes.
     """
@@ -39,6 +41,22 @@ class AutoproxyMode(Enum):
     FRONT = "front"
     LATCH = "latch"
     MEMBER = "member"
+
+    def json(self): return self.value
+
+def _to_json(value):
+    """Robust method to deep convert Model objects
+    """
+    if hasattr(value, "json"):
+        return value.json()
+    
+    if isinstance(value, (list, set, tuple)):
+        return [_to_json(v) for v in value]
+    
+    if isinstance(value, (dict,)):
+        return {k: _to_json(v) for k, v in value.items()}
+    
+    return value
 
 # Base class for all models
 
@@ -50,18 +68,11 @@ class Model:
         """Return a JSON object representing this model.
         """
         model = {}
-        privacy = {}
         for k, v in self.__dict__.items():
-            if not k.startswith("_"):
-                if "privacy" in k or "visibility" in k:
-                        privacy[k] = v.json()
-                elif hasattr(v, "json"):
-                    # recurse
-                    model[k] = v.json()
-                else:
-                    model[k] = v
-        if privacy != {}:
-            model["privacy"] = privacy
+            if k.startswith("_"): continue
+            if v is None: continue
+            model[k] = _to_json(v)
+
         return model
 
     def __init__(self, json, ignore_keys=None):
@@ -80,7 +91,7 @@ class Model:
             # and convert to proper Models if necessary
             if key in _VALUE_TRANSFORMATIONS:
                 Constructor = _VALUE_TRANSFORMATIONS[key]
-                value = Constructor(value)
+                value = Constructor(value) if value is not None else None
             key = _KEY_TRANSFORMATIONS.get(key, key)
 
             self.__dict__[key] = value
@@ -93,10 +104,19 @@ class PluralKitId(Model):
     uuid: Optional[str]
     id: Optional[str]
 
+    _six_character_allowed = "abcefghjknoprstuvwxyz"
+    _six_character_pattern = re.compile(
+        f"^([{_six_character_allowed}]{{3}}-?[{_six_character_allowed}]{{3}})$",
+        re.IGNORECASE,
+    )
+
     __slots__ = ["uuid", "id"]
 
-    def _check_id(self, id):
-        return len(id) == 5 and all(c in ALPHABET for c in id)
+    def _check_id(self, id: str) -> bool:
+        # 5-character IDs
+        if len(id) == 5 and all(c in ALPHABET for c in id): return True
+        # 6-character IDs
+        return bool(self._six_character_pattern.match(id))
 
     def _check_uuid(self, uuid):
         pattern = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
@@ -112,6 +132,9 @@ class PluralKitId(Model):
         object.__setattr__(self, "uuid", None)
         if id is not None:
             if self._check_id(id):
+                if len(id) >= 6:
+                    id = id.lower()
+                    id = f"{id[:3]}-{id[-3:]}"
                 object.__setattr__(self, "id", id)
             elif self._check_uuid(id):
                 object.__setattr__(self, "uuid", id)
@@ -121,6 +144,9 @@ class PluralKitId(Model):
             if self._check_uuid(uuid):
                 object.__setattr__(self, "uuid", uuid)
             elif self._check_id(uuid):
+                if len(uuid) >= 6:
+                    uuid = uuid.lower()
+                    uuid = f"{uuid[:3]}-{uuid[-3:]}"
                 object.__setattr__(self, "id", uuid)
             else:
                 raise ValueError(f"Malformed uuid given: {uuid!r}")
@@ -137,7 +163,12 @@ class PluralKitId(Model):
         if self.uuid is not None: attrs += f", {self.uuid!r}"
         return f"{self.__class__.__name__}({attrs})"
 
-    json = __str__
+    def json(self) -> str:
+        return (
+            f"{self.uuid}"
+            if self.uuid is not None
+            else f"{self.id.replace('-', '')}"
+        )
 
 class MemberId(PluralKitId):
     """Member IDs.
@@ -570,7 +601,7 @@ class ProxyTag(Model):
         prefix: Optional[str]=None,
         suffix: Optional[str]=None,
         *,
-        proxy_tag: Dict[str,str],
+        proxy_tag: Optional[Dict[str,str]]=None,
     ):
 
         if proxy_tag is not None:
@@ -685,7 +716,9 @@ class Member(Model):
         color: The member's color.
         birthday: The member's birthday.
         pronouns: The member's pronouns.
-        avatar_url: The member's avatar url.
+        avatar_url: The member's main avatar url that appears uncropped on the member card.
+        webhook_avatar_url: The member's avatar url used for proxied messages instead of the main
+            avatar.
         banner: The member's banner url.
         proxy_tags: The member's proxy tags.
         keep_proxy (bool): Whether the member's proxy tags remain in the proxied message or not.
@@ -697,28 +730,40 @@ class Member(Model):
         metadata_privacy: Whether the member's metadata (i.e. creation timestamp, message count) is
             visible to others.
         visibility: Whether this member is visible to others (i.e. in member lists).
+        autoproxy_enabled: Whether this member has autoproxy enabled. `None` if the member is not
+            from the client's system.
+        message_count: Member message count. `None` if the member's metadata privacy is set to
+            private and the member is not from the client's system.
+        last_message_timestamp: Timestamp of member's last message. `None` if the member's metadata
+            privacy is set to private and the member is not from the client's system.
+        tts: Whether this member has enabled tts or not
     """
     id: MemberId
     uuid: MemberId
     name: str
     created: Timestamp
-    name_privacy: Privacy
+    name_privacy: Optional[Privacy]
+    description_privacy: Optional[Privacy]
+    birthday_privacy: Optional[Privacy]
+    pronoun_privacy: Optional[Privacy]
+    avatar_privacy: Optional[Privacy]
+    metadata_privacy: Optional[Privacy]
+    visibility: Optional[Privacy]
     display_name: Optional[str]
     description: Optional[str]
-    description_privacy: Privacy
     color: Optional[Color]
     birthday: Optional[Birthday]
-    birthday_privacy: Privacy
     pronouns: Optional[str]
-    pronoun_privacy: Privacy
     avatar_url: Optional[str]
-    avatar_privacy: Privacy
+    webhook_avatar_url: Optional[str]
     keep_proxy: bool
-    metadata_privacy: Privacy
     proxy_tags: Optional[ProxyTags]
-    visibility: Privacy
     system: SystemId
     banner: Optional[str]
+    autoproxy_enabled: Optional[bool]
+    message_count: Optional[int]
+    last_message_timestamp: Optional[Timestamp]
+    tts: Optional[bool]
 
     def __str__(self):
         return f"{self.id!s}"
@@ -733,9 +778,15 @@ class Member(Model):
         ignore_keys = ("uuid", "id", "privacy",)
         Model.__init__(self, json, ignore_keys)
         # fix up the remaining keys
-        self.id = MemberId(id=json["id"], uuid=json["uuid"])
-        for key, value in json["privacy"].items():
-            self.__dict__[key] = Privacy(value)
+        self.id = MemberId(id=json["id"], uuid=json["uuid"]) 
+        # incorporate privacy keys when given
+        if json.get("privacy") is not None:
+            for key, value in json["privacy"].items():
+                self.__dict__[key] = Privacy(value) if value is not None else None
+        else:
+            for key, _ in self.__class__.__annotations__.items():
+                if "privacy" in key:
+                    self.__dict__[key] = None # unknown         
 
 class System(Model):
     """Represents a PluralKit system.
@@ -765,12 +816,12 @@ class System(Model):
     tag: Optional[str]
     avatar_url: Optional[str]
     tz: Timezone
-    description_privacy: Privacy
-    pronoun_privacy: Privacy
-    member_list_privacy: Privacy
-    group_list_privacy: Privacy
-    front_privacy: Privacy
-    front_history_privacy: Privacy
+    description_privacy: Optional[Privacy]
+    pronoun_privacy: Optional[Privacy]
+    member_list_privacy: Optional[Privacy]
+    group_list_privacy: Optional[Privacy]
+    front_privacy: Optional[Privacy]
+    front_history_privacy: Optional[Privacy]
     pronouns: Optional[str]
     banner: Optional[str]
     color: Optional[Color]
@@ -789,8 +840,14 @@ class System(Model):
         Model.__init__(self, json, ignore_keys)
         # fix up the remaining keys
         self.id = SystemId(id=json["id"], uuid=json["uuid"])
-        for key, value in json["privacy"].items():
-            self.__dict__[key] = Privacy(value)
+        # incorporate privacy keys when given
+        if json.get("privacy") is not None:
+            for key, value in json["privacy"].items():
+                self.__dict__[key] = Privacy(value) if value is not None else None
+        else:
+            for key, _ in self.__class__.__annotations__.items():
+                if "privacy" in key:
+                    self.__dict__[key] = None # unknown
 
 class Group(Model):
     """Represents a PluralKit system group.
@@ -849,6 +906,10 @@ class Switch(Model):
     Note:
         ``members`` can either be a list of `Member` models or a list of `MemberId` objects,
         depending on the client method used.
+
+        In particular, switch models from `Client.get_switches` carry `MemberId` objects, whereas
+        switch models from  `~Client.get_switch`, `~Client.new_switch`, and `~Client.update_switch`
+        carry full `Member` objects.
 
     Attributes:
         id: Switch's unique universal identifier (uuid).
@@ -921,6 +982,7 @@ def _proxy_tags_processor(proxy_tags):
 
 # [name given by API] -> [new pk.py (Python-friendly) name]
 _KEY_TRANSFORMATIONS = {
+    # (So far, all key names in the API are Python-friendly)
 }
 
 # [name given by API] -> [constructor to use on this object]
@@ -930,6 +992,8 @@ _VALUE_TRANSFORMATIONS = {
     "proxy_tags": _proxy_tags_processor,
     "created": Timestamp,
     "timestamp": Timestamp,
+    "last_message_timestamp": Timestamp,
+    "message_count": int,
     "channel": int,
     "original": int,
     "sender": int,
@@ -937,7 +1001,8 @@ _VALUE_TRANSFORMATIONS = {
     "timezone": Timezone,
 }
 
-# patchable keys, along with their respective checks
+# Patchable keys, along with their respective checks
+# These methods are for the client's patch (update) methods
 
 def _max_string_length(context, max_len, null_allowed=True):
     def check(value):
@@ -1024,6 +1089,28 @@ def _check_members(members):
         )
         raise ValueError(msg)
 
+def _check_optional_member(m):
+    """For `Client.update_autoproxy_settings`
+    """
+    if m is None: return None
+    if isinstance(m, MemberId): return str(m)
+    if isinstance(m, Member): return str(m.id)
+    # otherwise
+    try:
+        if isinstance(m, Member):
+            return str(m.id)
+        elif isinstance(m, MemberId):
+            return str(m)
+        else:
+            m = MemberId(m)
+            return str(m)
+    except (TypeError, ValueError):
+        msg = (
+            f"Could not cast {m!r} to a MemberId or Member. "
+            f"Please pass in a MemberId or Member object."
+        )
+        raise ValueError(msg)
+
 
 _PATCHABLE_SYSTEM_KEYS = {
     "name": _max_string_length("name", 100, null_allowed=False),
@@ -1080,6 +1167,10 @@ _PATCHABLE_GROUP_KEYS = {
 _PATCHABLE_SWITCH_KEYS = {
     "members": _check_members,
     "timestamp": _check_timestamp,
+}
+
+_PATCHABLE_AUTOPROXY_SETTINGS_KEYS = {
+    "autoproxy_member": _check_optional_member,
 }
 
 _PATCHABLE_SYSTEM_SETTINGS_KEYS = {
